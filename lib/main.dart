@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'ui/home_screen.dart';
+import 'ui/mode_select_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -15,7 +15,7 @@ class App extends StatelessWidget {
       title: 'Color Dodge',
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark(),
-      home: const HomeScreen(),
+      home: const ModeSelectScreen(),
     );
   }
 }
