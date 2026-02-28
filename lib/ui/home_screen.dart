@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'game_screen.dart';
+import 'mode_select_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -10,7 +10,7 @@ class HomeScreen extends StatelessWidget {
       body: Center(
         child: ElevatedButton(
           onPressed: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const GameScreen()),
+            MaterialPageRoute(builder: (_) => const ModeSelectScreen()),
           ),
           child: const Text('Play'),
         ),
