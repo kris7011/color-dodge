@@ -1,7 +1,10 @@
+import 'package:color_dodge/game/game_mode.dart';
+import 'package:color_dodge/ui/game_screen.dart';
 import 'package:flutter/material.dart';
-import 'game_screen.dart';
 
-enum GameMode { classic, colorMatch }
+Color _a(Color c, double opacity) {
+  return c.withValues(alpha: opacity.clamp(0.0, 1.0));
+}
 
 class ModeSelectScreen extends StatelessWidget {
   const ModeSelectScreen({super.key});
@@ -14,69 +17,148 @@ class ModeSelectScreen extends StatelessWidget {
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF0B0B10), Color(0xFF12121A), Color(0xFF0B0B10)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF07070B), Color(0xFF0F1020), Color(0xFF07070B)],
           ),
         ),
         child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Color Dodge',
-                  style: t.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'Pick a mode',
-                  style: t.bodyMedium?.copyWith(color: Colors.white70),
-                ),
-                const SizedBox(height: 18),
-
-                _ModeCard(
-                  title: 'Classic',
-                  subtitle: 'Dodge falling blocks. Survive as long as you can.',
-                  badgeText: null,
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const GameScreen(mode: GameMode.classic),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                _ModeCard(
-                  title: 'Color Match',
-                  subtitle: 'Match colors fast. New mechanics and combos.',
-                  badgeText: 'Coming soon',
-                  onTap: () => showDialog(
-                    context: context,
-                    builder: (_) => AlertDialog(
-                      title: const Text('Coming soon'),
-                      content: const Text(
-                        'Color Match mode lands in a future update.',
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: Stack(
+                    children: const [
+                      _GlowBlob(
+                        alignment: Alignment(-1.1, -0.9),
+                        size: 260,
+                        opacity: 0.06,
                       ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context),
-                          child: const Text('OK'),
-                        ),
-                      ],
-                    ),
+                      _GlowBlob(
+                        alignment: Alignment(1.2, -0.6),
+                        size: 220,
+                        opacity: 0.05,
+                      ),
+                      _GlowBlob(
+                        alignment: Alignment(0.9, 1.1),
+                        size: 260,
+                        opacity: 0.05,
+                      ),
+                    ],
                   ),
                 ),
+              ),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final isCompactHeight = constraints.maxHeight < 700;
 
-                const Spacer(),
-                Text(
-                  'Tip: drag left/right to move.',
-                  style: t.bodySmall?.copyWith(color: Colors.white54),
-                ),
-              ],
-            ),
+                  return SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minHeight: constraints.maxHeight - 36,
+                      ),
+                      child: IntrinsicHeight(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Color Dodge',
+                              style: t.headlineMedium?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: -0.5,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Choose a mode',
+                              style: t.bodyMedium?.copyWith(
+                                color: Colors.white70,
+                              ),
+                            ),
+                            SizedBox(height: isCompactHeight ? 14 : 18),
+                            _ModeCard(
+                              title: 'Survival',
+                              subtitle:
+                                  'Dodge falling blocks.\nLast as long as you can.',
+                              icon: Icons.timer,
+                              accent: const Color(0xFF4DA3FF),
+                              badgeText: 'Recommended',
+                              compact: isCompactHeight,
+                              onTap: () => Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      const GameScreen(mode: GameMode.survival),
+                                ),
+                              ),
+                            ),
+                            SizedBox(height: isCompactHeight ? 10 : 14),
+                            _ModeCard(
+                              title: 'Color Match',
+                              subtitle:
+                                  'Fast color swaps.\nCombos and multipliers.',
+                              icon: Icons.palette,
+                              accent: const Color(0xFFFF5DA2),
+                              badgeText: 'Coming soon',
+                              compact: isCompactHeight,
+                              onTap: () => showDialog(
+                                context: context,
+                                builder: (_) => AlertDialog(
+                                  title: const Text('Coming soon'),
+                                  content: const Text(
+                                    'Color Match mode lands in a future update.',
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(context),
+                                      child: const Text('OK'),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const Spacer(),
+                            if (!isCompactHeight) const SizedBox(height: 16),
+                            Container(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: isCompactHeight ? 8 : 10,
+                              ),
+                              decoration: BoxDecoration(
+                                color: _a(const Color(0xFF0B0C14), 0.70),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: _a(Colors.white, 0.10),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(
+                                    Icons.swipe,
+                                    color: Colors.white70,
+                                    size: 18,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'Tip: Drag left/right to move.',
+                                      style: t.bodySmall?.copyWith(
+                                        color: Colors.white70,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ],
           ),
         ),
       ),
@@ -87,14 +169,20 @@ class ModeSelectScreen extends StatelessWidget {
 class _ModeCard extends StatelessWidget {
   final String title;
   final String subtitle;
-  final String? badgeText;
+  final IconData icon;
+  final Color accent;
+  final String badgeText;
   final VoidCallback onTap;
+  final bool compact;
 
   const _ModeCard({
     required this.title,
     required this.subtitle,
-    required this.onTap,
+    required this.icon,
+    required this.accent,
     required this.badgeText,
+    required this.onTap,
+    required this.compact,
   });
 
   @override
@@ -103,70 +191,175 @@ class _ModeCard extends StatelessWidget {
 
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(20),
       child: Ink(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(compact ? 14 : 16),
         decoration: BoxDecoration(
-          color: const Color(0xFF151521),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: Colors.white10),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: _a(Colors.white, 0.10)),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              _a(Colors.white, 0.06),
+              _a(Colors.white, 0.04),
+              _a(Colors.white, 0.03),
+            ],
+          ),
+          boxShadow: [
+            BoxShadow(
+              blurRadius: 24,
+              spreadRadius: 0,
+              offset: const Offset(0, 10),
+              color: _a(Colors.black, 0.35),
+            ),
+            BoxShadow(
+              blurRadius: 30,
+              spreadRadius: 0,
+              offset: const Offset(0, 10),
+              color: _a(accent, 0.10),
+            ),
+          ],
         ),
         child: Row(
           children: [
             Container(
-              width: 44,
-              height: 44,
+              width: compact ? 46 : 52,
+              height: compact ? 46 : 52,
               decoration: BoxDecoration(
-                color: Colors.white10,
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(18),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [_a(accent, 0.35), _a(accent, 0.12)],
+                ),
+                border: Border.all(color: _a(accent, 0.35)),
               ),
-              child: const Icon(Icons.videogame_asset, color: Colors.white70),
+              child: Icon(
+                icon,
+                size: compact ? 22 : 24,
+                color: _a(Colors.white, 0.90),
+              ),
             ),
-            const SizedBox(width: 12),
+            SizedBox(width: compact ? 12 : 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
-                      Text(
-                        title,
-                        style: t.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
+                      Expanded(
+                        child: Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: (compact ? t.titleMedium : t.titleLarge)
+                              ?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: -0.3,
+                                color: Colors.white,
+                              ),
                         ),
                       ),
-                      if (badgeText != null) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white10,
-                            borderRadius: BorderRadius.circular(999),
-                            border: Border.all(color: Colors.white12),
-                          ),
-                          child: Text(
-                            badgeText!,
-                            style: t.labelSmall?.copyWith(
-                              color: Colors.white70,
-                            ),
-                          ),
+                      const SizedBox(width: 10),
+                      Flexible(
+                        child: _Badge(
+                          text: badgeText,
+                          accent: accent,
+                          compact: compact,
                         ),
-                      ],
+                      ),
                     ],
                   ),
-                  const SizedBox(height: 4),
+                  SizedBox(height: compact ? 6 : 8),
                   Text(
                     subtitle,
-                    style: t.bodySmall?.copyWith(color: Colors.white70),
+                    style: t.bodyMedium?.copyWith(
+                      color: Colors.white70,
+                      height: 1.25,
+                      fontSize: compact ? 13 : null,
+                    ),
                   ),
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right, color: Colors.white38),
+            const SizedBox(width: 10),
+            Icon(
+              Icons.chevron_right,
+              size: compact ? 20 : 24,
+              color: _a(Colors.white, 0.35),
+            ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Badge extends StatelessWidget {
+  final String text;
+  final Color accent;
+  final bool compact;
+
+  const _Badge({
+    required this.text,
+    required this.accent,
+    required this.compact,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context).textTheme;
+
+    return Container(
+      constraints: BoxConstraints(maxWidth: compact ? 110 : 130),
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 8 : 10,
+        vertical: compact ? 5 : 6,
+      ),
+      decoration: BoxDecoration(
+        color: _a(accent, 0.16),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: _a(accent, 0.35)),
+      ),
+      child: Text(
+        text,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: t.labelSmall?.copyWith(
+          color: Colors.white,
+          fontWeight: FontWeight.w700,
+          fontSize: compact ? 10.5 : null,
+        ),
+      ),
+    );
+  }
+}
+
+class _GlowBlob extends StatelessWidget {
+  final Alignment alignment;
+  final double size;
+  final double opacity;
+
+  const _GlowBlob({
+    required this.alignment,
+    required this.size,
+    required this.opacity,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: alignment,
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: RadialGradient(
+            colors: [_a(Colors.white, opacity), Colors.transparent],
+            stops: const [0.0, 1.0],
+          ),
         ),
       ),
     );

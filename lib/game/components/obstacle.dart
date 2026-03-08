@@ -1,46 +1,47 @@
-import 'package:flame/collisions.dart';
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
-import '../color_dodge_game.dart';
-import 'player.dart';
 
-class Obstacle extends RectangleComponent
-    with CollisionCallbacks, HasGameReference<ColorDodgeGame> {
-  final double fallSpeed;
+class Obstacle extends RectangleComponent {
+  static final Paint _activePaint = Paint()..color = Colors.redAccent;
 
-  Obstacle({required this.fallSpeed, required double width})
-    : super(
-        size: Vector2(width, 22),
-        paint: Paint()..color = Colors.redAccent,
-        anchor: Anchor.topLeft,
-      );
+  bool isActive = false;
+  double fallSpeed = 0;
 
-  @override
-  Future<void> onLoad() async {
-    await super.onLoad();
-    add(RectangleHitbox());
+  Obstacle() : super(anchor: Anchor.topLeft, size: Vector2.zero());
+
+  void activate({
+    required double x,
+    required double y,
+    required double width,
+    required double height,
+    required double newFallSpeed,
+  }) {
+    isActive = true;
+    fallSpeed = newFallSpeed;
+    position.setValues(x, y);
+    size.setValues(width, height);
+    paint = _activePaint;
   }
 
-  @override
-  void update(double dt) {
-    super.update(dt);
+  void deactivate() {
+    isActive = false;
+    fallSpeed = 0;
+    position.setValues(-1000, -1000);
+    size.setValues(0, 0);
+  }
 
+  void step(double dt) {
+    if (!isActive) return;
     position.y += fallSpeed * dt;
+  }
 
-    if (position.y > game.size.y + 50) {
-      removeFromParent();
-    }
+  bool isOffScreen(double screenHeight) {
+    return isActive && position.y > screenHeight + 60;
   }
 
   @override
-  void onCollisionStart(
-    Set<Vector2> intersectionPoints,
-    PositionComponent other,
-  ) {
-    super.onCollisionStart(intersectionPoints, other);
-
-    if (other is Player) {
-      game.gameOver();
-    }
+  void render(Canvas canvas) {
+    if (!isActive) return;
+    super.render(canvas);
   }
 }
