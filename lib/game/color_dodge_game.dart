@@ -1,553 +1,892 @@
-import 'dart:math';
-
+import 'dart:math' as math;
+import 'package:flame/components.dart';
 import 'package:flame/events.dart';
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'game_mode.dart';
-import 'components/obstacle.dart';
-import 'components/player.dart';
 
 class HudState {
-  final double score;
-  final double best;
-  final int nearMisses;
-
   const HudState({
     required this.score,
     required this.best,
     required this.nearMisses,
+    required this.isGameOver,
+    required this.isVictory,
   });
+
+  final double score;
+  final double best;
+  final int nearMisses;
+  final bool isGameOver;
+  final bool isVictory;
+
+  HudState copyWith({
+    double? score,
+    double? best,
+    int? nearMisses,
+    bool? isGameOver,
+    bool? isVictory,
+  }) {
+    return HudState(
+      score: score ?? this.score,
+      best: best ?? this.best,
+      nearMisses: nearMisses ?? this.nearMisses,
+      isGameOver: isGameOver ?? this.isGameOver,
+      isVictory: isVictory ?? this.isVictory,
+    );
+  }
 }
 
-class ColorDodgeGame extends FlameGame with DragCallbacks {
-  static const String _bestKeySurvival = 'best_survival_seconds';
+enum _ObstacleVisualStyle { normal, slim, heavy }
 
-  final GameMode mode;
+enum _SectionType {
+  intro,
+  staircase,
+  weave,
+  tunnel,
+  alternating,
+  edgeRun,
+  sprint,
+}
 
-  ColorDodgeGame({required this.mode});
+class _PlannedRow {
+  const _PlannedRow({
+    required this.blockedLanes,
+    required this.visualStyle,
+    required this.recommendedLane,
+  });
 
-  final ValueNotifier<HudState> hud = ValueNotifier(
-    const HudState(score: 0, best: 0, nearMisses: 0),
+  final List<int> blockedLanes;
+  final _ObstacleVisualStyle visualStyle;
+  final int recommendedLane;
+}
+
+class ColorDodgeGame extends FlameGame
+    with DragCallbacks, TapCallbacks, HasCollisionDetection {
+  ColorDodgeGame({this.onGameOver, this.gameMode = GameMode.survival});
+
+  final VoidCallback? onGameOver;
+  final GameMode gameMode;
+
+  late _PlayerComponent _player;
+  final math.Random _random = math.Random();
+
+  final List<_ObstacleRow> _rows = [];
+  final List<_PlannedRow> _plannedRows = [];
+
+  final ValueNotifier<HudState> hud = ValueNotifier<HudState>(
+    const HudState(
+      score: 0,
+      best: 0,
+      nearMisses: 0,
+      isGameOver: false,
+      isVictory: false,
+    ),
   );
 
-  final Random _rng = Random();
+  double _timeSinceStart = 0;
+  double _timeSinceLastSpawn = 0;
+  double _nextSpawnDelay = 0.42;
+  double _bestScore = 0;
 
-  final List<Obstacle> _obstaclePool = [];
-  final List<Obstacle> _activeObstacles = [];
+  bool _isGameOver = false;
+  bool _isVictory = false;
 
-  Player? _player;
-  Player? get player => _player;
+  int _recommendedLane = 2;
+  int _targetLane = 2;
+  int _nearMisses = 0;
 
-  double _spawnTimer = 0;
-  double _spawnInterval = 1.15;
-  double _fallSpeed = 145;
-  double _elapsed = 0;
+  _SectionType? _lastSectionType;
 
-  double _scoreSeconds = 0;
-  double _bestSeconds = 0;
+  static const int _laneCount = 5;
 
-  double _hudTimer = 0;
+  static const double _playerWidth = 38;
+  static const double _playerHeight = 38;
+  static const double _playerBottomMargin = 104;
 
-  SharedPreferences? _prefs;
+  static const double _sidePadding = 14;
+  static const double _laneGap = 8;
 
-  Vector2 _cameraBase = Vector2.zero();
-  double _shakeTimer = 0;
-  double _shakeDuration = 0;
-  double _shakeIntensity = 0;
+  static const double _baseRowHeight = 28;
+  static const double _maxRowHeight = 48;
 
-  static const int _laneCount = 3;
-  static const double _laneGap = 16.0;
-  static const double _sidePadding = 18.0;
-  static const double _obstacleHeight = 22.0;
+  static const double _baseRowSpeed = 150;
+  static const double _maxRowSpeed = 380;
 
-  static const int _initialPoolSize = 24;
+  static const double _playerLaneSpeed = 980;
+  static const double _victoryScore = 150.0;
+  static const int _planAheadCount = 16;
 
-  // Finger-follow movement
-  static const double _followSpeed = 30.0;
-  static const double _snapDistance = 0.35;
-
-  bool _isDragging = false;
-  double _targetX = 0;
-  double _dragPlayerOffsetX = 0;
-
-  int _lastSafeLane = 1;
-
-  // Performance logging
-  static const bool _enablePerfLogging = false;
-  double _perfWindowSeconds = 0;
-  int _perfFrameCount = 0;
-  double _perfMaxDt = 0;
-  int _perfOver18ms = 0;
-  int _perfOver25ms = 0;
-  int _perfOver33ms = 0;
+  @override
+  Color backgroundColor() => const Color(0xFF0B0F17);
 
   @override
   Future<void> onLoad() async {
     await super.onLoad();
 
-    _prefs = await SharedPreferences.getInstance();
-    _bestSeconds = _prefs?.getDouble(_bestKeySurvival) ?? 0;
+    _player = _PlayerComponent()
+      ..size = Vector2(_playerWidth, _playerHeight)
+      ..position = Vector2(
+        _laneLeft(_targetLane),
+        size.y - _playerBottomMargin,
+      );
 
-    final startX = size.x / 2;
-    final player = Player()..position = Vector2(startX, size.y - 80);
-
-    _player = player;
-    add(player);
-
-    for (var i = 0; i < _initialPoolSize; i++) {
-      _createPooledObstacle();
-    }
-
-    _targetX = startX;
-    _cameraBase = camera.viewfinder.position.clone();
-
-    _pushHud(force: true);
-  }
-
-  @override
-  void onGameResize(Vector2 size) {
-    super.onGameResize(size);
-
-    final player = _player;
-    if (player == null) return;
-
-    player.position.y = size.y - 80;
-    player.clampToGameSize(size);
-    _targetX = player.position.x;
-
-    _cameraBase = camera.viewfinder.position.clone();
-  }
-
-  @override
-  void onDragStart(DragStartEvent event) {
-    super.onDragStart(event);
-
-    final player = _player;
-    if (player == null) return;
-
-    _isDragging = true;
-
-    _dragPlayerOffsetX = player.position.x - event.localPosition.x;
-    _targetX = player.position.x;
-  }
-
-  @override
-  void onDragUpdate(DragUpdateEvent event) {
-    super.onDragUpdate(event);
-
-    final player = _player;
-    if (player == null || !_isDragging) return;
-
-    final minX = player.radius;
-    final maxX = size.x - player.radius;
-
-    final wantedX = event.localEndPosition.x + _dragPlayerOffsetX;
-    _targetX = wantedX.clamp(minX, maxX);
-  }
-
-  @override
-  void onDragEnd(DragEndEvent event) {
-    super.onDragEnd(event);
-    _isDragging = false;
-  }
-
-  @override
-  void onDragCancel(DragCancelEvent event) {
-    super.onDragCancel(event);
-    _isDragging = false;
+    add(_player);
+    _ensurePlanAhead();
+    _pushHud();
   }
 
   @override
   void update(double dt) {
     super.update(dt);
 
-    if (_enablePerfLogging) {
-      _trackPerformance(dt);
-    }
-
-    if (mode != GameMode.survival) return;
-
-    final player = _player;
-    if (player == null) return;
-
-    _elapsed += dt;
-    _scoreSeconds = _elapsed;
-
-    _updatePlayerMovement(player, dt);
-    _updateDifficulty();
-    _updateObstacles(dt, player);
-
-    _spawnTimer += dt;
-    if (_spawnTimer >= _spawnInterval) {
-      _spawnTimer = 0;
-      _spawnFairPattern();
-    }
-
-    _updateShake(dt);
-
-    _hudTimer += dt;
-    if (_hudTimer >= 0.10) {
-      _hudTimer = 0;
-      _pushHud();
-    }
-  }
-
-  void _updatePlayerMovement(Player player, double dt) {
-    final minX = player.radius;
-    final maxX = size.x - player.radius;
-    _targetX = _targetX.clamp(minX, maxX);
-
-    final dx = _targetX - player.position.x;
-    final moveFactor = (_followSpeed * dt).clamp(0.0, 1.0);
-
-    player.position.x += dx * moveFactor;
-
-    if ((_targetX - player.position.x).abs() <= _snapDistance) {
-      player.position.x = _targetX;
-    }
-
-    player.clampToGameSize(size);
-  }
-
-  void _trackPerformance(double dt) {
-    _perfWindowSeconds += dt;
-    _perfFrameCount++;
-
-    if (dt > _perfMaxDt) {
-      _perfMaxDt = dt;
-    }
-
-    if (dt > 0.018) {
-      _perfOver18ms++;
-    }
-
-    if (dt > 0.025) {
-      _perfOver25ms++;
-    }
-
-    if (dt > 0.0333) {
-      _perfOver33ms++;
-    }
-
-    if (_perfWindowSeconds < 5.0) {
+    if (_isGameOver || _isVictory) {
       return;
     }
 
-    final avgDtMs = (_perfWindowSeconds / _perfFrameCount) * 1000;
-    final maxDtMs = _perfMaxDt * 1000;
+    _timeSinceStart += dt;
+    _timeSinceLastSpawn += dt;
 
-    debugPrint(
-      '[PERF] avg=${avgDtMs.toStringAsFixed(2)}ms '
-      'max=${maxDtMs.toStringAsFixed(2)}ms '
-      '>18ms=$_perfOver18ms '
-      '>25ms=$_perfOver25ms '
-      '>33ms=$_perfOver33ms '
-      'activeObstacles=${_activeObstacles.length} '
-      'poolSize=${_obstaclePool.length}',
+    _updatePlayerPosition(dt);
+    _spawnIfNeeded();
+    _cleanupRows();
+    _checkCollisions();
+    _checkNearMisses();
+    _updateHud();
+    _checkVictory();
+  }
+
+  void _updatePlayerPosition(double dt) {
+    final targetX = _laneLeft(_targetLane);
+    final delta = targetX - _player.x;
+
+    if (delta.abs() < 0.5) {
+      _player.x = targetX;
+      return;
+    }
+
+    final maxStep = _playerLaneSpeed * dt;
+    _player.x += delta.clamp(-maxStep, maxStep);
+  }
+
+  void _spawnIfNeeded() {
+    if (_timeSinceLastSpawn < _nextSpawnDelay) {
+      return;
+    }
+
+    _ensurePlanAhead();
+    if (_plannedRows.isEmpty) {
+      return;
+    }
+
+    final planned = _plannedRows.removeAt(0);
+    final difficulty = _difficultyProgress();
+    final rowHeight = _calculateRowHeight(
+      difficulty: difficulty,
+      style: planned.visualStyle,
+    );
+    final rowSpeed = _calculateRowSpeed(difficulty);
+
+    final row = _ObstacleRow(
+      y: -rowHeight,
+      height: rowHeight,
+      speed: rowSpeed,
+      laneCount: _laneCount,
+      blockedLanes: planned.blockedLanes,
+      laneGap: _laneGap,
+      color: _rowColor(),
+      visualStyle: planned.visualStyle,
     );
 
-    _perfWindowSeconds = 0;
-    _perfFrameCount = 0;
-    _perfMaxDt = 0;
-    _perfOver18ms = 0;
-    _perfOver25ms = 0;
-    _perfOver33ms = 0;
-  }
+    final laneShift = (planned.recommendedLane - _recommendedLane).abs();
 
-  void _updateObstacles(double dt, Player player) {
-    for (var i = _activeObstacles.length - 1; i >= 0; i--) {
-      final obstacle = _activeObstacles[i];
-      obstacle.step(dt);
+    _rows.add(row);
+    add(row);
 
-      if (_collides(player, obstacle)) {
-        gameOver();
-        return;
-      }
-
-      if (obstacle.isOffScreen(size.y)) {
-        _releaseObstacle(obstacle);
-      }
-    }
-  }
-
-  bool _collides(Player player, Obstacle obstacle) {
-    final circleX = player.position.x;
-    final circleY = player.position.y;
-    final radius = player.radius;
-
-    final rectLeft = obstacle.position.x;
-    final rectTop = obstacle.position.y;
-    final rectRight = rectLeft + obstacle.size.x;
-    final rectBottom = rectTop + obstacle.size.y;
-
-    final closestX = circleX.clamp(rectLeft, rectRight);
-    final closestY = circleY.clamp(rectTop, rectBottom);
-
-    final dx = circleX - closestX;
-    final dy = circleY - closestY;
-
-    return (dx * dx) + (dy * dy) <= (radius * radius);
-  }
-
-  void _pushHud({bool force = false}) {
-    final next = HudState(
-      score: _scoreSeconds,
-      best: _bestSeconds,
-      nearMisses: 0,
+    _recommendedLane = planned.recommendedLane;
+    _timeSinceLastSpawn = 0;
+    _nextSpawnDelay = _calculateNextSpawnDelay(
+      speed: rowSpeed,
+      laneShift: laneShift,
     );
+  }
 
-    if (!force) {
-      final current = hud.value;
-      if ((current.score - next.score).abs() < 0.01 &&
-          (current.best - next.best).abs() < 0.01 &&
-          current.nearMisses == next.nearMisses) {
-        return;
+  void _ensurePlanAhead() {
+    while (_plannedRows.length < _planAheadCount) {
+      _appendNextSection();
+    }
+  }
+
+  void _appendNextSection() {
+    final sectionType = _chooseSectionType();
+    final startLane = _plannedRows.isEmpty
+        ? _recommendedLane
+        : _plannedRows.last.recommendedLane;
+
+    switch (sectionType) {
+      case _SectionType.intro:
+        _plannedRows.addAll(_buildIntroSection(startLane));
+        break;
+      case _SectionType.staircase:
+        _plannedRows.addAll(_buildStaircaseSection(startLane));
+        break;
+      case _SectionType.weave:
+        _plannedRows.addAll(_buildWeaveSection(startLane));
+        break;
+      case _SectionType.tunnel:
+        _plannedRows.addAll(_buildTunnelSection(startLane));
+        break;
+      case _SectionType.alternating:
+        _plannedRows.addAll(_buildAlternatingSection(startLane));
+        break;
+      case _SectionType.edgeRun:
+        _plannedRows.addAll(_buildEdgeRunSection(startLane));
+        break;
+      case _SectionType.sprint:
+        _plannedRows.addAll(_buildSprintSection(startLane));
+        break;
+    }
+
+    _lastSectionType = sectionType;
+  }
+
+  _SectionType _chooseSectionType() {
+    final options = <_SectionType>[];
+
+    if (_timeSinceStart < 12) {
+      options.addAll([_SectionType.intro, _SectionType.staircase]);
+    } else if (_timeSinceStart < 30) {
+      options.addAll([
+        _SectionType.staircase,
+        _SectionType.weave,
+        _SectionType.tunnel,
+      ]);
+    } else if (_timeSinceStart < 55) {
+      options.addAll([
+        _SectionType.weave,
+        _SectionType.tunnel,
+        _SectionType.alternating,
+      ]);
+    } else if (_timeSinceStart < 85) {
+      options.addAll([
+        _SectionType.weave,
+        _SectionType.tunnel,
+        _SectionType.alternating,
+        _SectionType.edgeRun,
+      ]);
+    } else {
+      options.addAll([
+        _SectionType.tunnel,
+        _SectionType.alternating,
+        _SectionType.edgeRun,
+        _SectionType.sprint,
+      ]);
+    }
+
+    if (_lastSectionType != null && options.length > 1) {
+      options.remove(_lastSectionType);
+    }
+
+    return options[_random.nextInt(options.length)];
+  }
+
+  List<_PlannedRow> _buildIntroSection(int startLane) {
+    final direction = _preferredDirection(startLane);
+    final secondLane = _clampLane(startLane + direction);
+
+    return [
+      _singleGap(startLane, _ObstacleVisualStyle.normal),
+      _singleGap(startLane, _ObstacleVisualStyle.slim),
+      _singleGap(secondLane, _ObstacleVisualStyle.normal),
+      _singleGap(secondLane, _ObstacleVisualStyle.slim),
+    ];
+  }
+
+  List<_PlannedRow> _buildStaircaseSection(int startLane) {
+    final rows = <_PlannedRow>[];
+    final direction = _preferredDirection(startLane);
+    int lane = startLane;
+    final length = _timeSinceStart < 50 ? 4 : 5;
+
+    for (int i = 0; i < length; i++) {
+      lane = _clampLane(lane + direction);
+      rows.add(
+        _singleGap(
+          lane,
+          i.isEven ? _ObstacleVisualStyle.normal : _ObstacleVisualStyle.slim,
+        ),
+      );
+    }
+
+    return rows;
+  }
+
+  List<_PlannedRow> _buildWeaveSection(int startLane) {
+    final rows = <_PlannedRow>[];
+    int lane = startLane;
+    int direction = _preferredDirection(startLane);
+
+    for (int i = 0; i < 6; i++) {
+      final candidate = lane + direction;
+      if (candidate < 0 || candidate >= _laneCount) {
+        direction *= -1;
+      }
+
+      lane = _clampLane(lane + direction);
+
+      rows.add(
+        _singleGap(
+          lane,
+          i == 2 || i == 4
+              ? _ObstacleVisualStyle.heavy
+              : _ObstacleVisualStyle.normal,
+        ),
+      );
+
+      direction *= -1;
+    }
+
+    return rows;
+  }
+
+  List<_PlannedRow> _buildTunnelSection(int startLane) {
+    final rows = <_PlannedRow>[];
+    final lane = startLane.clamp(1, _laneCount - 2);
+
+    rows.add(_singleGap(lane, _ObstacleVisualStyle.normal));
+    rows.add(_singleGap(lane, _ObstacleVisualStyle.heavy));
+    rows.add(_singleGap(lane, _ObstacleVisualStyle.normal));
+
+    final exitLane = _clampLane(lane + (_random.nextBool() ? -1 : 1));
+    rows.add(_singleGap(exitLane, _ObstacleVisualStyle.slim));
+
+    return rows;
+  }
+
+  List<_PlannedRow> _buildAlternatingSection(int startLane) {
+    final leftLane = startLane <= 2 ? 1 : 0;
+    final rightLane = startLane >= 2 ? 3 : 4;
+
+    return [
+      _singleGap(leftLane, _ObstacleVisualStyle.normal),
+      _singleGap(rightLane, _ObstacleVisualStyle.normal),
+      _singleGap(_clampLane(leftLane + 1), _ObstacleVisualStyle.slim),
+      _singleGap(_clampLane(rightLane - 1), _ObstacleVisualStyle.heavy),
+    ];
+  }
+
+  List<_PlannedRow> _buildEdgeRunSection(int startLane) {
+    final rows = <_PlannedRow>[];
+    final edge = startLane <= 2 ? 0 : _laneCount - 1;
+    int lane = startLane;
+
+    while (lane != edge) {
+      lane += lane < edge ? 1 : -1;
+      rows.add(_singleGap(lane, _ObstacleVisualStyle.normal));
+    }
+
+    rows.add(_singleGap(edge, _ObstacleVisualStyle.heavy));
+
+    final returnLane = edge == 0 ? 1 : _laneCount - 2;
+    rows.add(_singleGap(returnLane, _ObstacleVisualStyle.slim));
+
+    return rows;
+  }
+
+  List<_PlannedRow> _buildSprintSection(int startLane) {
+    final rows = <_PlannedRow>[];
+    int lane = startLane;
+
+    for (int i = 0; i < 7; i++) {
+      final direction = _preferredDirection(lane);
+      lane = _clampLane(lane + direction);
+
+      rows.add(
+        _singleGap(
+          lane,
+          i.isEven ? _ObstacleVisualStyle.slim : _ObstacleVisualStyle.normal,
+        ),
+      );
+    }
+
+    return rows;
+  }
+
+  _PlannedRow _singleGap(int safeLane, _ObstacleVisualStyle style) {
+    final blocked = <int>[];
+
+    for (int lane = 0; lane < _laneCount; lane++) {
+      if (lane != safeLane) {
+        blocked.add(lane);
       }
     }
 
-    hud.value = next;
+    return _PlannedRow(
+      blockedLanes: blocked,
+      visualStyle: style,
+      recommendedLane: safeLane,
+    );
   }
 
-  void _updateDifficulty() {
-    final progress = 1 - exp(-_elapsed / 28.0);
-
-    _spawnInterval = 1.15 - (0.48 * progress);
-    _fallSpeed = 145 + (115 * progress);
-  }
-
-  void _spawnFairPattern() {
-    final safeLane = _chooseNextSafeLane();
-    final patternType = _choosePatternType();
-
-    switch (patternType) {
-      case 0:
-        _spawnTwoBlockedOneSafe(safeLane);
-        break;
-      case 1:
-        _spawnOneBlockedTwoSafe(safeLane);
-        break;
-      case 2:
-        _spawnWideCenterBlockWithSafeLane(safeLane);
-        break;
-      default:
-        _spawnTwoBlockedOneSafe(safeLane);
-        break;
-    }
-
-    _lastSafeLane = safeLane;
-  }
-
-  int _chooseNextSafeLane() {
-    final possible = <int>[_lastSafeLane];
-
-    if (_lastSafeLane > 0) {
-      possible.add(_lastSafeLane - 1);
-    }
-
-    if (_lastSafeLane < _laneCount - 1) {
-      possible.add(_lastSafeLane + 1);
-    }
-
-    if (_elapsed < 12) {
-      return possible[_rng.nextInt(possible.length)];
-    }
-
-    final allowBigShiftChance = (0.08 + (_elapsed / 300)).clamp(0.0, 0.22);
-    if (_rng.nextDouble() < allowBigShiftChance) {
-      return _rng.nextInt(_laneCount);
-    }
-
-    return possible[_rng.nextInt(possible.length)];
-  }
-
-  int _choosePatternType() {
-    final progress = 1 - exp(-_elapsed / 30.0);
-    final roll = _rng.nextDouble();
-
-    final oneBlockedChance = (0.55 - (0.30 * progress)).clamp(0.18, 0.55);
-    final twoBlockedChance = (0.35 + (0.22 * progress)).clamp(0.35, 0.60);
-
-    if (roll < oneBlockedChance) {
+  int _preferredDirection(int lane) {
+    if (lane <= 0) {
       return 1;
     }
 
-    if (roll < oneBlockedChance + twoBlockedChance) {
-      return 0;
+    if (lane >= _laneCount - 1) {
+      return -1;
     }
 
-    return 2;
+    if (lane == 2) {
+      return _random.nextBool() ? -1 : 1;
+    }
+
+    return lane < 2 ? 1 : -1;
   }
 
-  double _laneWidth() {
-    final totalGapWidth = (_laneCount - 1) * _laneGap;
-    final totalWidth = size.x - (_sidePadding * 2) - totalGapWidth;
-    return max(40.0, totalWidth / _laneCount);
+  int _clampLane(int lane) {
+    return lane.clamp(0, _laneCount - 1);
   }
 
-  double _laneX(int laneIndex) {
-    return _sidePadding + laneIndex * (_laneWidth() + _laneGap);
+  double _calculateNextSpawnDelay({
+    required double speed,
+    required int laneShift,
+  }) {
+    final laneWidth = _laneWidth();
+    final moveDistance = laneShift * laneWidth;
+    final moveTime = laneShift == 0 ? 0.0 : moveDistance / _playerLaneSpeed;
+
+    double baseDelay;
+    if (_timeSinceStart < 10) {
+      baseDelay = 0.56;
+    } else if (_timeSinceStart < 20) {
+      baseDelay = 0.52;
+    } else if (_timeSinceStart < 40) {
+      baseDelay = 0.49;
+    } else if (_timeSinceStart < 70) {
+      baseDelay = 0.46;
+    } else if (_timeSinceStart < 100) {
+      baseDelay = 0.43;
+    } else {
+      baseDelay = 0.40;
+    }
+
+    final fairnessDelay = moveTime + 0.14;
+    return math.max(baseDelay, fairnessDelay).clamp(0.38, 0.74);
   }
 
-  Rect _laneRect(int laneIndex) {
-    final x = _laneX(laneIndex);
-    return Rect.fromLTWH(x, -30, _laneWidth(), _obstacleHeight);
+  double _calculateRowHeight({
+    required double difficulty,
+    required _ObstacleVisualStyle style,
+  }) {
+    double base;
+    if (_timeSinceStart < 25) {
+      base = 30;
+    } else if (_timeSinceStart < 60) {
+      base = 31 + (difficulty * 3);
+    } else if (_timeSinceStart < 100) {
+      base = 33 + (difficulty * 5);
+    } else {
+      base = 35 + (difficulty * 7);
+    }
+
+    switch (style) {
+      case _ObstacleVisualStyle.slim:
+        return (base - 4).clamp(_baseRowHeight, _maxRowHeight);
+      case _ObstacleVisualStyle.heavy:
+        return (base + 5).clamp(_baseRowHeight, _maxRowHeight);
+      case _ObstacleVisualStyle.normal:
+        return base.clamp(_baseRowHeight, _maxRowHeight);
+    }
   }
 
-  void _spawnObstacleRect(Rect rect) {
-    final obstacle = _acquireObstacle();
+  double _calculateRowSpeed(double difficulty) {
+    if (_timeSinceStart < 12) {
+      return 155;
+    }
 
-    obstacle.activate(
-      x: rect.left,
-      y: rect.top,
-      width: rect.width,
-      height: rect.height,
-      newFallSpeed: _fallSpeed,
+    if (_timeSinceStart < 25) {
+      return 170;
+    }
+
+    if (_timeSinceStart < 45) {
+      return 185 + ((difficulty - 0.15).clamp(0.0, 1.0) * 18);
+    }
+
+    if (_timeSinceStart < 75) {
+      return 210 + ((difficulty - 0.30).clamp(0.0, 1.0) * 32);
+    }
+
+    if (_timeSinceStart < 110) {
+      return 245 + ((difficulty - 0.55).clamp(0.0, 1.0) * 50);
+    }
+
+    return (295 + ((difficulty - 0.75).clamp(0.0, 1.0) * 60)).clamp(
+      _baseRowSpeed,
+      _maxRowSpeed,
     );
-
-    _activeObstacles.add(obstacle);
   }
 
-  Obstacle _acquireObstacle() {
-    for (final obstacle in _obstaclePool) {
-      if (!obstacle.isActive) {
-        return obstacle;
+  void _checkNearMisses() {
+    final playerRect = _player.toRect();
+
+    for (final row in _rows) {
+      if (row.nearMissAwarded) {
+        continue;
+      }
+
+      final rowCenterY = row.y + (row.size.y / 2);
+      final playerCenterY = playerRect.center.dy;
+      final closeY = (rowCenterY - playerCenterY).abs() < 18;
+
+      if (!closeY) {
+        continue;
+      }
+
+      final closestBlockedDistance = row.closestBlockedEdgeDistance(playerRect);
+      if (closestBlockedDistance != null && closestBlockedDistance < 8) {
+        row.nearMissAwarded = true;
+        _nearMisses++;
       }
     }
-
-    return _createPooledObstacle();
   }
 
-  void _releaseObstacle(Obstacle obstacle) {
-    obstacle.deactivate();
-    _activeObstacles.remove(obstacle);
-  }
+  void _cleanupRows() {
+    final rowsToRemove = _rows.where((row) => row.y > size.y + 80).toList();
 
-  Obstacle _createPooledObstacle() {
-    final obstacle = Obstacle();
-    obstacle.deactivate();
-    _obstaclePool.add(obstacle);
-    add(obstacle);
-    return obstacle;
-  }
-
-  void _spawnTwoBlockedOneSafe(int safeLane) {
-    for (var lane = 0; lane < _laneCount; lane++) {
-      if (lane == safeLane) continue;
-      _spawnObstacleRect(_laneRect(lane));
+    for (final row in rowsToRemove) {
+      _rows.remove(row);
+      row.removeFromParent();
     }
   }
 
-  void _spawnOneBlockedTwoSafe(int preferredSafeLane) {
-    final blockedLaneOptions = <int>[0, 1, 2]..remove(preferredSafeLane);
-    final blockedLane =
-        blockedLaneOptions[_rng.nextInt(blockedLaneOptions.length)];
+  void _checkCollisions() {
+    final playerRect = _player.toRect();
 
-    _spawnObstacleRect(_laneRect(blockedLane));
+    for (final row in _rows) {
+      if (!row.intersectsVertically(playerRect)) {
+        continue;
+      }
+
+      if (row.collidesWith(playerRect)) {
+        _gameOver();
+        return;
+      }
+    }
   }
 
-  void _spawnWideCenterBlockWithSafeLane(int safeLane) {
-    if (safeLane == 0) {
-      final left = _laneRect(1);
-      final right = _laneRect(2);
-      _spawnObstacleRect(
-        Rect.fromLTWH(left.left, -30, right.right - left.left, _obstacleHeight),
-      );
+  void _updateHud() {
+    final currentScore = _timeSinceStart;
+    if (currentScore > _bestScore) {
+      _bestScore = currentScore;
+    }
+
+    hud.value = hud.value.copyWith(
+      score: currentScore,
+      best: _bestScore,
+      nearMisses: _nearMisses,
+      isGameOver: false,
+      isVictory: false,
+    );
+  }
+
+  void _checkVictory() {
+    if (_timeSinceStart >= _victoryScore) {
+      _victory();
+    }
+  }
+
+  void _gameOver() {
+    if (_isGameOver || _isVictory) {
       return;
     }
 
-    if (safeLane == 2) {
-      final left = _laneRect(0);
-      final right = _laneRect(1);
-      _spawnObstacleRect(
-        Rect.fromLTWH(left.left, -30, right.right - left.left, _obstacleHeight),
-      );
+    _isGameOver = true;
+
+    hud.value = hud.value.copyWith(
+      score: _timeSinceStart,
+      best: _bestScore,
+      nearMisses: _nearMisses,
+      isGameOver: true,
+      isVictory: false,
+    );
+
+    overlays.add('GameOver');
+    onGameOver?.call();
+  }
+
+  void _victory() {
+    if (_isVictory || _isGameOver) {
       return;
     }
 
-    _spawnObstacleRect(_laneRect(0));
-    _spawnObstacleRect(_laneRect(2));
-  }
+    _isVictory = true;
 
-  void _updateShake(double dt) {
-    if (_shakeTimer <= 0) {
-      camera.viewfinder.position = _cameraBase;
-      return;
-    }
+    hud.value = hud.value.copyWith(
+      score: _timeSinceStart,
+      best: math.max(_bestScore, _timeSinceStart),
+      nearMisses: _nearMisses,
+      isGameOver: false,
+      isVictory: true,
+    );
 
-    _shakeTimer -= dt;
-    final t = (_shakeTimer / _shakeDuration).clamp(0.0, 1.0);
-    final intensity = _shakeIntensity * t;
-
-    final dx = (_rng.nextDouble() * 2 - 1) * intensity;
-    final dy = (_rng.nextDouble() * 2 - 1) * intensity;
-
-    camera.viewfinder.position = _cameraBase + Vector2(dx, dy);
-
-    if (_shakeTimer <= 0) {
-      camera.viewfinder.position = _cameraBase;
-    }
-  }
-
-  void shake({double duration = 0.20, double intensity = 10}) {
-    _shakeDuration = duration;
-    _shakeTimer = duration;
-    _shakeIntensity = intensity;
-  }
-
-  void gameOver() {
-    shake(duration: 0.22, intensity: 14);
-
-    if (_scoreSeconds > _bestSeconds) {
-      _bestSeconds = _scoreSeconds;
-      _prefs?.setDouble(_bestKeySurvival, _bestSeconds);
-    }
-
-    _pushHud(force: true);
-
-    pauseEngine();
     overlays.add('GameOver');
   }
 
   void resetRun() {
-    for (final obstacle in _activeObstacles.toList()) {
-      _releaseObstacle(obstacle);
+    _isGameOver = false;
+    _isVictory = false;
+    _timeSinceStart = 0;
+    _timeSinceLastSpawn = 0;
+    _nextSpawnDelay = 0.42;
+    _nearMisses = 0;
+    _lastSectionType = null;
+
+    for (final row in List<_ObstacleRow>.from(_rows)) {
+      row.removeFromParent();
     }
 
-    _spawnTimer = 0;
-    _spawnInterval = 1.15;
-    _fallSpeed = 145;
-    _elapsed = 0;
-    _scoreSeconds = 0;
-    _hudTimer = 0;
-    _lastSafeLane = 1;
-    _isDragging = false;
-    _dragPlayerOffsetX = 0;
+    _rows.clear();
+    _plannedRows.clear();
 
-    final player = _player;
-    if (player != null) {
-      player.position = Vector2(size.x / 2, size.y - 80);
-      player.clampToGameSize(size);
-      _targetX = player.position.x;
-    } else {
-      _targetX = size.x / 2;
-    }
+    _targetLane = 2;
+    _recommendedLane = 2;
 
-    camera.viewfinder.position = _cameraBase;
-    _shakeTimer = 0;
-    _shakeDuration = 0;
-    _shakeIntensity = 0;
+    _player.position = Vector2(
+      _laneLeft(_targetLane),
+      size.y - _playerBottomMargin,
+    );
 
-    _pushHud(force: true);
+    _ensurePlanAhead();
 
     overlays.remove('GameOver');
-    resumeEngine();
+    _pushHud();
+  }
+
+  void _pushHud() {
+    hud.value = HudState(
+      score: _timeSinceStart,
+      best: _bestScore,
+      nearMisses: _nearMisses,
+      isGameOver: _isGameOver,
+      isVictory: _isVictory,
+    );
+  }
+
+  double _difficultyProgress() {
+    return (_timeSinceStart / 100.0).clamp(0.0, 1.0);
+  }
+
+  double _laneWidth() {
+    return (size.x - (_sidePadding * 2)) / _laneCount;
+  }
+
+  double _laneLeft(int lane) {
+    final laneWidth = _laneWidth();
+    final centerX = _sidePadding + (laneWidth * lane) + (laneWidth / 2);
+    return centerX - (_playerWidth / 2);
+  }
+
+  int _laneFromX(double x) {
+    final laneWidth = _laneWidth();
+    final lane = ((x - _sidePadding) / laneWidth).floor();
+    return lane.clamp(0, _laneCount - 1);
+  }
+
+  Color _rowColor() {
+    if (_timeSinceStart < 20) {
+      return const Color(0xFF3485FF);
+    }
+    if (_timeSinceStart < 40) {
+      return const Color(0xFF00A86B);
+    }
+    if (_timeSinceStart < 65) {
+      return const Color(0xFFFFB020);
+    }
+    if (_timeSinceStart < 90) {
+      return const Color(0xFFFF6B35);
+    }
+    if (_timeSinceStart < 120) {
+      return const Color(0xFF8C42FF);
+    }
+    return const Color(0xFFFF2D8A);
+  }
+
+  void _moveToLane(int lane) {
+    if (_isGameOver || _isVictory) {
+      return;
+    }
+
+    _targetLane = _clampLane(lane);
   }
 
   @override
-  void onRemove() {
-    hud.dispose();
-    super.onRemove();
+  void onTapDown(TapDownEvent event) {
+    _moveToLane(_laneFromX(event.localPosition.x));
+    super.onTapDown(event);
+  }
+
+  @override
+  void onDragStart(DragStartEvent event) {
+    _moveToLane(_laneFromX(event.localPosition.x));
+    super.onDragStart(event);
+  }
+
+  @override
+  void onDragUpdate(DragUpdateEvent event) {
+    _moveToLane(_laneFromX(event.localEndPosition.x));
+    super.onDragUpdate(event);
+  }
+}
+
+class _PlayerComponent extends PositionComponent {
+  @override
+  void render(Canvas canvas) {
+    super.render(canvas);
+
+    final rect = Rect.fromLTWH(0, 0, size.x, size.y);
+    final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(13));
+
+    final shadowPaint = Paint()..color = const Color(0x26000000);
+    final fillPaint = Paint()..color = const Color(0xFFFFFFFF);
+    final innerPaint = Paint()
+      ..color = const Color(0x14000000)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2;
+
+    canvas.drawRRect(rrect.shift(const Offset(0, 3)), shadowPaint);
+    canvas.drawRRect(rrect, fillPaint);
+    canvas.drawRRect(rrect, innerPaint);
+  }
+
+  @override
+  Rect toRect() {
+    return Rect.fromLTWH(position.x, position.y, size.x, size.y);
+  }
+}
+
+class _ObstacleRow extends PositionComponent {
+  _ObstacleRow({
+    required double y,
+    required double height,
+    required this.speed,
+    required this.laneCount,
+    required this.blockedLanes,
+    required this.laneGap,
+    required this.color,
+    required this.visualStyle,
+  }) {
+    position = Vector2(0, y);
+    size = Vector2.zero();
+    this.height = height;
+  }
+
+  final double speed;
+  final int laneCount;
+  final List<int> blockedLanes;
+  final double laneGap;
+  final Color color;
+  final _ObstacleVisualStyle visualStyle;
+
+  bool nearMissAwarded = false;
+
+  @override
+  void onGameResize(Vector2 size) {
+    super.onGameResize(size);
+    this.size = Vector2(size.x, height);
+  }
+
+  @override
+  void update(double dt) {
+    super.update(dt);
+    y += speed * dt;
+  }
+
+  @override
+  void render(Canvas canvas) {
+    super.render(canvas);
+
+    final totalWidth = size.x;
+    const sidePadding = 14.0;
+    final laneWidth = (totalWidth - (sidePadding * 2)) / laneCount;
+
+    final pulse = (232 + (math.sin(y * 0.035) * 18)).round().clamp(0, 255);
+    final fillPaint = Paint()..color = color.withAlpha(pulse);
+    final shadowPaint = Paint()..color = const Color(0x1C000000);
+    final innerPaint = Paint()
+      ..color = const Color(0x10FFFFFF)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0;
+
+    for (final lane in blockedLanes) {
+      final x = sidePadding + (lane * laneWidth) + (laneGap / 2);
+      final width = laneWidth - laneGap;
+      final rect = Rect.fromLTWH(x, 0, width, size.y);
+
+      final radius = switch (visualStyle) {
+        _ObstacleVisualStyle.slim => 8.0,
+        _ObstacleVisualStyle.normal => 11.0,
+        _ObstacleVisualStyle.heavy => 14.0,
+      };
+
+      final rrect = RRect.fromRectAndRadius(rect, Radius.circular(radius));
+
+      canvas.drawRRect(rrect.shift(const Offset(0, 2)), shadowPaint);
+      canvas.drawRRect(rrect, fillPaint);
+      canvas.drawRRect(rrect, innerPaint);
+    }
+  }
+
+  bool intersectsVertically(Rect playerRect) {
+    final rowTop = y;
+    final rowBottom = y + size.y;
+    return playerRect.bottom > rowTop && playerRect.top < rowBottom;
+  }
+
+  bool collidesWith(Rect playerRect) {
+    for (final rect in _blockedRects()) {
+      if (rect.overlaps(playerRect)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  double? closestBlockedEdgeDistance(Rect playerRect) {
+    double? best;
+
+    for (final rect in _blockedRects()) {
+      final overlapsY =
+          playerRect.bottom > rect.top && playerRect.top < rect.bottom;
+      if (!overlapsY) {
+        continue;
+      }
+
+      if (playerRect.right <= rect.left) {
+        final d = rect.left - playerRect.right;
+        best = best == null ? d : math.min(best, d);
+      } else if (playerRect.left >= rect.right) {
+        final d = playerRect.left - rect.right;
+        best = best == null ? d : math.min(best, d);
+      } else {
+        return 0;
+      }
+    }
+
+    return best;
+  }
+
+  List<Rect> _blockedRects() {
+    final totalWidth = size.x;
+    const sidePadding = 14.0;
+    final laneWidth = (totalWidth - (sidePadding * 2)) / laneCount;
+
+    return blockedLanes.map((lane) {
+      final x = sidePadding + (lane * laneWidth) + (laneGap / 2);
+      final width = laneWidth - laneGap;
+      return Rect.fromLTWH(x, y, width, size.y);
+    }).toList();
   }
 }
