@@ -1,36 +1,66 @@
+import 'dart:async';
+
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 
 import '../game/color_dodge_game.dart' as game_file;
 import '../game/game_mode.dart';
+import '../storage/best_score_store.dart';
 
-class GameScreen extends StatelessWidget {
+class GameScreen extends StatefulWidget {
   const GameScreen({super.key, required this.mode});
 
   final GameMode mode;
 
   @override
-  Widget build(BuildContext context) {
-    final game = game_file.ColorDodgeGame(gameMode: mode);
+  State<GameScreen> createState() => _GameScreenState();
+}
 
-    return Scaffold(
-      backgroundColor: const Color(0xFF0B0F17),
-      body: Stack(
-        children: [
-          const Positioned.fill(child: _BackgroundLayer()),
-          GameWidget<game_file.ColorDodgeGame>(
-            game: game,
-            initialActiveOverlays: const ['Hud'],
-            overlayBuilderMap: {
-              'Hud': (ctx, g) => _HudOverlay(game: g),
-              'GameOver': (ctx, g) => _GameOverOverlay(game: g),
-            },
+class _GameScreenState extends State<GameScreen> {
+  late final BestScoreStore _scoreStore = BestScoreStore(widget.mode);
+  late final Future<double> _bestScoreFuture = _scoreStore.load();
+  game_file.ColorDodgeGame? _game;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<double>(
+      future: _bestScoreFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Scaffold(
+            backgroundColor: Color(0xFF0B0F17),
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        final game = _game ??= game_file.ColorDodgeGame(
+          gameMode: widget.mode,
+          initialBestScore: snapshot.data ?? 0.0,
+          onNewBestScore: (score) {
+            unawaited(_scoreStore.saveIfHigher(score));
+          },
+        );
+
+        return Scaffold(
+          backgroundColor: const Color(0xFF0B0F17),
+          body: Stack(
+            children: [
+              const Positioned.fill(child: _BackgroundLayer()),
+              GameWidget<game_file.ColorDodgeGame>(
+                game: game,
+                initialActiveOverlays: const ['Hud'],
+                overlayBuilderMap: {
+                  'Hud': (ctx, g) => _HudOverlay(game: g),
+                  'GameOver': (ctx, g) => _GameOverOverlay(game: g),
+                },
+              ),
+              const Positioned.fill(
+                child: IgnorePointer(child: _TopBottomVignette()),
+              ),
+            ],
           ),
-          const Positioned.fill(
-            child: IgnorePointer(child: _TopBottomVignette()),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }

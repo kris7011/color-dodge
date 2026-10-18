@@ -64,9 +64,16 @@ class _PlannedRow {
 
 class ColorDodgeGame extends FlameGame
     with DragCallbacks, TapCallbacks, HasCollisionDetection {
-  ColorDodgeGame({this.onGameOver, this.gameMode = GameMode.survival});
+  ColorDodgeGame({
+    this.onGameOver,
+    this.onNewBestScore,
+    this.gameMode = GameMode.survival,
+    double initialBestScore = 0,
+  }) : _bestScore = math.max(0.0, initialBestScore),
+       _lastPersistedBestScore = math.max(0.0, initialBestScore);
 
   final VoidCallback? onGameOver;
+  final ValueChanged<double>? onNewBestScore;
   final GameMode gameMode;
 
   late _PlayerComponent _player;
@@ -88,7 +95,8 @@ class ColorDodgeGame extends FlameGame
   double _timeSinceStart = 0;
   double _timeSinceLastSpawn = 0;
   double _nextSpawnDelay = 0.42;
-  double _bestScore = 0;
+  double _bestScore;
+  double _lastPersistedBestScore;
 
   bool _isGameOver = false;
   bool _isVictory = false;
@@ -597,12 +605,21 @@ class ColorDodgeGame extends FlameGame
     }
   }
 
+  void _saveNewRecord() {
+    _bestScore = math.max(_bestScore, _timeSinceStart);
+    if (_bestScore > _lastPersistedBestScore) {
+      _lastPersistedBestScore = _bestScore;
+      onNewBestScore?.call(_bestScore);
+    }
+  }
+
   void _gameOver() {
     if (_isGameOver || _isVictory) {
       return;
     }
 
     _isGameOver = true;
+    _saveNewRecord();
 
     hud.value = hud.value.copyWith(
       score: _timeSinceStart,
@@ -622,6 +639,7 @@ class ColorDodgeGame extends FlameGame
     }
 
     _isVictory = true;
+    _saveNewRecord();
 
     hud.value = hud.value.copyWith(
       score: _timeSinceStart,
