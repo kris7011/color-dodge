@@ -70,7 +70,9 @@ class ColorDodgeGame extends FlameGame
     this.onNewBestScore,
     this.gameMode = GameMode.survival,
     double initialBestScore = 0,
-  }) : _bestScore = math.max(0.0, initialBestScore),
+    int? randomSeed,
+  }) : _random = randomSeed == null ? math.Random() : math.Random(randomSeed),
+       _bestScore = math.max(0.0, initialBestScore),
        _lastPersistedBestScore = math.max(0.0, initialBestScore);
 
   final VoidCallback? onGameOver;
@@ -78,7 +80,7 @@ class ColorDodgeGame extends FlameGame
   final GameMode gameMode;
 
   late _PlayerComponent _player;
-  final math.Random _random = math.Random();
+  final math.Random _random;
 
   final List<_ObstacleRow> _rows = [];
   final List<_PlannedRow> _plannedRows = [];

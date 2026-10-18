@@ -7,6 +7,7 @@ Move between five lanes to avoid incoming obstacles. Survive longer to increase 
 ## Current gameplay
 
 - **Survival:** Playable obstacle-dodging mode with a five-lane arena.
+- **Daily Challenge:** A UTC-day seeded obstacle run with a separate local record each day.
 - **Color Match:** Visible in the menu, but deliberately marked *Coming soon*.
 - **Touch controls:** Drag left or right to move your player.
 - **Changing patterns:** Obstacle rows vary as the run progresses.
@@ -64,6 +65,6 @@ test/
 
 ## Current scope and next steps
 
-This is a **portfolio and learning project**, not a published mobile game. Survival is the currently playable mode; Color Match is a future feature.
+This is a **portfolio and learning project**, not a published mobile game. Survival is the currently playable mode; Color Match is a future feature. Daily Challenge uses the UTC date as the random seed. Device size and game-frame timing may still affect the experience, so this is not a synchronized worldwide leaderboard.
 
 Potential next steps are unit tests for collision and obstacle-generation rules, persistent best scores, accessibility refinements, and additional playable modes. Keep changes small and covered by automated tests.

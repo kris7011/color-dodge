@@ -9,6 +9,7 @@ void main() {
     expect(find.text('Color Dodge'), findsOneWidget);
     expect(find.text('Survival'), findsOneWidget);
     expect(find.text('Color Match'), findsOneWidget);
+    expect(find.text('Daily Challenge'), findsOneWidget);
     expect(find.text('Recommended'), findsOneWidget);
     expect(find.text('Coming soon'), findsOneWidget);
   });

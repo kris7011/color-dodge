@@ -33,4 +33,18 @@ void main() {
     expect(await colorMatch.load(), 0.0);
     expect(await survival.load(), 17.0);
   });
+  test('daily records do not carry over to the next day', () async {
+    const monday = BestScoreStore(
+      GameMode.dailyChallenge,
+      challengeDateKey: '2026-10-19',
+    );
+    const tuesday = BestScoreStore(
+      GameMode.dailyChallenge,
+      challengeDateKey: '2026-10-20',
+    );
+    await monday.saveIfHigher(56.0);
+    expect(await monday.load(), 56.0);
+    expect(await tuesday.load(), 0.0);
+  });
+
 }

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../game/color_dodge_game.dart' as game_file;
 import '../game/game_mode.dart';
 import '../storage/best_score_store.dart';
+import '../game/daily_challenge.dart';
 
 class GameScreen extends StatefulWidget {
   const GameScreen({super.key, required this.mode});
@@ -17,7 +18,14 @@ class GameScreen extends StatefulWidget {
 }
 
 class _GameScreenState extends State<GameScreen> {
-  late final BestScoreStore _scoreStore = BestScoreStore(widget.mode);
+  late final DateTime _challengeDate = DateTime.now().toUtc();
+  late final String? _challengeDayKey = widget.mode == GameMode.dailyChallenge
+      ? DailyChallenge.utcDayKey(_challengeDate)
+      : null;
+  late final BestScoreStore _scoreStore = BestScoreStore(
+    widget.mode,
+    challengeDateKey: _challengeDayKey,
+  );
   late final Future<double> _bestScoreFuture = _scoreStore.load();
   game_file.ColorDodgeGame? _game;
 
@@ -35,6 +43,9 @@ class _GameScreenState extends State<GameScreen> {
 
         final game = _game ??= game_file.ColorDodgeGame(
           gameMode: widget.mode,
+          randomSeed: _challengeDayKey == null
+              ? null
+              : DailyChallenge.seedFor(_challengeDate),
           initialBestScore: snapshot.data ?? 0.0,
           onNewBestScore: (score) {
             unawaited(_scoreStore.saveIfHigher(score));
