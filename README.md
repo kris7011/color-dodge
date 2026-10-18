@@ -13,7 +13,7 @@ Move between five lanes to avoid incoming obstacles. Survive longer to increase 
 - **Live HUD:** Displays score during the run, followed by score, best score, and near misses on the results screen.
 - **Replay:** Start another run from the end-of-game overlay.
 
-The best score is maintained for the current game instance; persistent high scores and additional modes are not implemented yet.
+Best scores are stored locally using SharedPreferences and persist across app launches. Additional game modes are not yet implemented.
 
 ## Technology
 
