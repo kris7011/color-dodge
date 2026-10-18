@@ -1,14 +1,23 @@
+import '../game/daily_challenge.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../game/game_mode.dart';
 
 /// Stores each game mode's best score locally across app launches.
 class BestScoreStore {
-  const BestScoreStore(this.mode);
+  const BestScoreStore(this.mode, {this.challengeDateKey});
 
   final GameMode mode;
+  final String? challengeDateKey;
 
-  String get _key => 'color_dodge.best_score.${mode.name}';
+  String get _key {
+    if (mode == GameMode.dailyChallenge) {
+      final day = challengeDateKey ??
+          DailyChallenge.utcDayKey(DateTime.now().toUtc());
+      return 'color_dodge.best_score.${mode.name}.$day';
+    }
+    return 'color_dodge.best_score.${mode.name}';
+  }
 
   Future<double> load() async {
     final prefs = await SharedPreferences.getInstance();
