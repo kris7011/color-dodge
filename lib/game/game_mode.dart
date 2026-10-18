@@ -1,1 +1,1 @@
-enum GameMode { survival, colorMatch }
+enum GameMode { survival, dailyChallenge, colorMatch }
