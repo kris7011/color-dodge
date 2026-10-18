@@ -95,6 +95,23 @@ class ModeSelectScreen extends StatelessWidget {
                             ),
                             SizedBox(height: isCompactHeight ? 10 : 14),
                             _ModeCard(
+                              title: 'Daily Challenge',
+                              subtitle:
+                                  'A new seeded course each UTC day.\nBeat your daily best.',
+                              icon: Icons.calendar_today,
+                              accent: const Color(0xFF4EE6A8),
+                              badgeText: 'Daily',
+                              compact: isCompactHeight,
+                              onTap: () => Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => const GameScreen(
+                                    mode: GameMode.dailyChallenge,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            SizedBox(height: isCompactHeight ? 10 : 14),
+                            _ModeCard(
                               title: 'Color Match',
                               subtitle:
                                   'Fast color swaps.\nCombos and multipliers.',
