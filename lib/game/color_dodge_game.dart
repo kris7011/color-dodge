@@ -5,6 +5,7 @@ import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 
 import 'game_mode.dart';
+import 'collision_geometry.dart';
 
 class HudState {
   const HudState({
@@ -856,55 +857,29 @@ class _ObstacleRow extends PositionComponent {
     }
   }
 
-  bool intersectsVertically(Rect playerRect) {
-    final rowTop = y;
-    final rowBottom = y + size.y;
-    return playerRect.bottom > rowTop && playerRect.top < rowBottom;
-  }
+  bool intersectsVertically(Rect playerRect) =>
+      CollisionGeometry.rowIntersectsVertically(
+        playerRect: playerRect,
+        rowTop: y,
+        rowHeight: size.y,
+      );
 
-  bool collidesWith(Rect playerRect) {
-    for (final rect in _blockedRects()) {
-      if (rect.overlaps(playerRect)) {
-        return true;
-      }
-    }
+  bool collidesWith(Rect playerRect) =>
+      CollisionGeometry.collidesWith(playerRect, _blockedRects());
 
-    return false;
-  }
+  double? closestBlockedEdgeDistance(Rect playerRect) =>
+      CollisionGeometry.closestBlockedEdgeDistance(
+        playerRect,
+        _blockedRects(),
+      );
 
-  double? closestBlockedEdgeDistance(Rect playerRect) {
-    double? best;
+  List<Rect> _blockedRects() => CollisionGeometry.blockedRects(
+        totalWidth: size.x,
+        rowTop: y,
+        rowHeight: size.y,
+        laneCount: laneCount,
+        blockedLanes: blockedLanes,
+        laneGap: laneGap,
+      );
 
-    for (final rect in _blockedRects()) {
-      final overlapsY =
-          playerRect.bottom > rect.top && playerRect.top < rect.bottom;
-      if (!overlapsY) {
-        continue;
-      }
-
-      if (playerRect.right <= rect.left) {
-        final d = rect.left - playerRect.right;
-        best = best == null ? d : math.min(best, d);
-      } else if (playerRect.left >= rect.right) {
-        final d = playerRect.left - rect.right;
-        best = best == null ? d : math.min(best, d);
-      } else {
-        return 0;
-      }
-    }
-
-    return best;
-  }
-
-  List<Rect> _blockedRects() {
-    final totalWidth = size.x;
-    const sidePadding = 14.0;
-    final laneWidth = (totalWidth - (sidePadding * 2)) / laneCount;
-
-    return blockedLanes.map((lane) {
-      final x = sidePadding + (lane * laneWidth) + (laneGap / 2);
-      final width = laneWidth - laneGap;
-      return Rect.fromLTWH(x, y, width, size.y);
-    }).toList();
-  }
 }
