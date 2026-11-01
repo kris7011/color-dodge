@@ -224,7 +224,20 @@ class ColorMatchGame extends FlameGame
 
       final lane = _laneFromX(_player.x + _player.width / 2);
       row.resolvedLane = lane;
-      _applyResult(rules.pass(row.colors[lane]));
+      final previousColor = rules.currentColorIndex;
+      final result = rules.pass(row.colors[lane]);
+
+      // Rows spawned before a colour change still contain the previous colour.
+      // Re-target only unresolved rows; otherwise they can be impossible to match.
+      if (result.newColor != null) {
+        for (final pendingRow in _rows) {
+          if (pendingRow.resolvedLane == null) {
+            rules.retargetPendingRow(pendingRow.colors, previousColor);
+          }
+        }
+      }
+
+      _applyResult(result);
 
       if (rules.isOver) {
         return;
