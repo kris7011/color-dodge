@@ -7,6 +7,7 @@ import '../game/color_dodge_game.dart' as game_file;
 import '../game/game_mode.dart';
 import '../storage/best_score_store.dart';
 import '../game/daily_challenge.dart';
+import 'arena_background.dart';
 
 class GameScreen extends StatefulWidget {
   const GameScreen({super.key, required this.mode});
@@ -56,7 +57,7 @@ class _GameScreenState extends State<GameScreen> {
           backgroundColor: const Color(0xFF0B0F17),
           body: Stack(
             children: [
-              const Positioned.fill(child: _BackgroundLayer()),
+              const Positioned.fill(child: ArenaBackground()),
               GameWidget<game_file.ColorDodgeGame>(
                 game: game,
                 initialActiveOverlays: const ['Hud'],
@@ -74,50 +75,6 @@ class _GameScreenState extends State<GameScreen> {
       },
     );
   }
-}
-
-class _BackgroundLayer extends StatelessWidget {
-  const _BackgroundLayer();
-
-  @override
-  Widget build(BuildContext context) {
-    return CustomPaint(
-      painter: _BackgroundPainter(),
-      child: const SizedBox.expand(),
-    );
-  }
-}
-
-class _BackgroundPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rect = Offset.zero & size;
-
-    final bgPaint = Paint()
-      ..shader = const LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [Color(0xFF101726), Color(0xFF0B0F17)],
-      ).createShader(rect);
-
-    canvas.drawRect(rect, bgPaint);
-
-    const sidePadding = 14.0;
-    const laneCount = 5;
-    final laneWidth = (size.width - (sidePadding * 2)) / laneCount;
-
-    final linePaint = Paint()
-      ..color = const Color(0x10FFFFFF)
-      ..strokeWidth = 1;
-
-    for (int i = 0; i <= laneCount; i++) {
-      final x = sidePadding + (laneWidth * i);
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), linePaint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class _TopBottomVignette extends StatelessWidget {

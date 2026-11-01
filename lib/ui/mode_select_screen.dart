@@ -1,4 +1,6 @@
 import 'package:color_dodge/game/game_mode.dart';
+import 'package:color_dodge/storage/color_match_progress_store.dart';
+import 'package:color_dodge/ui/color_match_screen.dart';
 import 'package:color_dodge/ui/game_screen.dart';
 import 'package:flutter/material.dart';
 
@@ -6,8 +8,40 @@ Color _a(Color c, double opacity) {
   return c.withValues(alpha: opacity.clamp(0.0, 1.0));
 }
 
-class ModeSelectScreen extends StatelessWidget {
+class ModeSelectScreen extends StatefulWidget {
   const ModeSelectScreen({super.key});
+
+  @override
+  State<ModeSelectScreen> createState() => _ModeSelectScreenState();
+}
+
+class _ModeSelectScreenState extends State<ModeSelectScreen> {
+  static const _progressStore = ColorMatchProgressStore();
+
+  Future<ColorMatchProgress> _colorMatchProgress = _progressStore.load();
+
+  Future<void> _openColorMatch() async {
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const ColorMatchScreen()));
+
+    // The run may have changed the stored progress shown on the card.
+    if (mounted) {
+      setState(() {
+        _colorMatchProgress = _progressStore.load();
+      });
+    }
+  }
+
+  String _colorMatchSubtitle(ColorMatchProgress? progress) {
+    const rules = 'Match your colour.\nCombos and multipliers.';
+
+    if (progress == null || progress.runsPlayed == 0) {
+      return rules;
+    }
+
+    return '$rules\nBest ${progress.bestScore} · Level ${progress.highestLevel}';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -111,28 +145,16 @@ class ModeSelectScreen extends StatelessWidget {
                               ),
                             ),
                             SizedBox(height: isCompactHeight ? 10 : 14),
-                            _ModeCard(
-                              title: 'Color Match',
-                              subtitle:
-                                  'Fast color swaps.\nCombos and multipliers.',
-                              icon: Icons.palette,
-                              accent: const Color(0xFFFF5DA2),
-                              badgeText: 'Coming soon',
-                              compact: isCompactHeight,
-                              onTap: () => showDialog(
-                                context: context,
-                                builder: (_) => AlertDialog(
-                                  title: const Text('Coming soon'),
-                                  content: const Text(
-                                    'Color Match mode lands in a future update.',
-                                  ),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () => Navigator.pop(context),
-                                      child: const Text('OK'),
-                                    ),
-                                  ],
-                                ),
+                            FutureBuilder<ColorMatchProgress>(
+                              future: _colorMatchProgress,
+                              builder: (context, snapshot) => _ModeCard(
+                                title: 'Color Match',
+                                subtitle: _colorMatchSubtitle(snapshot.data),
+                                icon: Icons.palette,
+                                accent: const Color(0xFFFF5DA2),
+                                badgeText: 'New',
+                                compact: isCompactHeight,
+                                onTap: _openColorMatch,
                               ),
                             ),
                             const Spacer(),
