@@ -119,7 +119,9 @@ class ColorMatchRules {
   /// were spawned. Swap old/new colours rather than replacing arbitrary blocks:
   /// this preserves the matching lanes and their reachability.
   void retargetPendingRow(List<int> row, int previousColorIndex) {
-    if (previousColorIndex == _currentColor) return;
+    if (previousColorIndex == _currentColor) {
+      return;
+    }
 
     for (var lane = 0; lane < row.length; lane++) {
       if (row[lane] == previousColorIndex) {
