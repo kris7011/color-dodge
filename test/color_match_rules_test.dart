@@ -53,7 +53,45 @@ void main() {
     }
   });
 
-  test('matches score with a growing combo multiplier', () {
+  test('already-spawned rows stay playable after colour changes, even at level four', () {
+    for (final seed in [0, 3, 7, 42, 999]) {
+      final rules = ColorMatchRules(seed: seed);
+
+      // Six consecutive colour changes also cross the level-four boundary,
+      // where only one matching lane is allowed in newly spawned rows.
+      for (var phase = 0; phase < 6; phase++) {
+        final previousColor = rules.currentColorIndex;
+        final pending = List.generate(4, (_) => rules.nextRow());
+        final originals = pending.map((row) => List<int>.of(row)).toList();
+
+        for (var match = 0; match < ColorMatchRules.matchesPerColor; match++) {
+          expect(rules.pass(rules.currentColorIndex).matched, isTrue);
+        }
+
+        expect(rules.currentColorIndex, isNot(previousColor));
+
+        for (var i = 0; i < pending.length; i++) {
+          rules.retargetPendingRow(pending[i], previousColor);
+
+          final originalMatches =
+              originals[i].where((color) => color == previousColor).length;
+          final newMatches = pending[i]
+              .where((color) => color == rules.currentColorIndex)
+              .length;
+          expect(newMatches, originalMatches, reason: 'seed=$seed phase=$phase row=$i');
+          expect(newMatches, greaterThan(0));
+
+          for (var lane = 0; lane < ColorMatchRules.laneCount; lane++) {
+            if (originals[i][lane] == previousColor) {
+              expect(pending[i][lane], rules.currentColorIndex);
+            }
+          }
+        }
+      }
+    }
+  });
+
+
     final rules = ColorMatchRules(seed: 1);
     final points = [
       for (var i = 0; i < 7; i++) rules.pass(rules.currentColorIndex).points,
