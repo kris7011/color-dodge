@@ -91,7 +91,7 @@ void main() {
     }
   });
 
-
+  test('matches score with a growing combo multiplier', () {
     final rules = ColorMatchRules(seed: 1);
     final points = [
       for (var i = 0; i < 7; i++) rules.pass(rules.currentColorIndex).points,
