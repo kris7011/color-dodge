@@ -115,7 +115,22 @@ class ColorMatchRules {
     return row;
   }
 
-  /// Applies the block the player passed through. Returns what happened.
+  /// Keep falling rows playable when the player's colour changes after they
+  /// were spawned. Swap old/new colours rather than replacing arbitrary blocks:
+  /// this preserves the matching lanes and their reachability.
+  void retargetPendingRow(List<int> row, int previousColorIndex) {
+    if (previousColorIndex == _currentColor) return;
+
+    for (var lane = 0; lane < row.length; lane++) {
+      if (row[lane] == previousColorIndex) {
+        row[lane] = _currentColor;
+      } else if (row[lane] == _currentColor) {
+        row[lane] = previousColorIndex;
+      }
+    }
+  }
+
+
   PassResult pass(int colorIndex) {
     if (isOver) {
       throw StateError('The run is over.');
