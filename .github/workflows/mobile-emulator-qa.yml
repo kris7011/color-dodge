@@ -63,4 +63,4 @@ jobs:
           echo "id=$simulator_id" >> "$GITHUB_OUTPUT"
       - name: Run Color Match on the simulator
         shell: bash
-        run: flutter test integration_test/color_match_demo_test.dart -d "${{ steps.simulator.outputs.id }}"
+        run: python3 -c 'import subprocess,sys; subprocess.run(["flutter", "test", "integration_test/mobile_smoke_test.dart", "-d", sys.argv[1]], check=True, timeout=420)' "${{ steps.simulator.outputs.id }}"
