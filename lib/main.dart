@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'features/preferences/application/game_preferences_cubit.dart';
+import 'features/preferences/data/shared_preferences_game_preferences_repository.dart';
 import 'ui/mode_select_screen.dart';
 
 void main() {
@@ -11,11 +14,16 @@ class App extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return BlocProvider<GamePreferencesCubit>(
+      create: (_) => GamePreferencesCubit(
+        const SharedPreferencesGamePreferencesRepository(),
+      )..load(),
+      child: MaterialApp(
       title: 'Color Dodge',
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark(),
-      home: const ModeSelectScreen(),
+        home: const ModeSelectScreen(),
+      ),
     );
   }
 }
