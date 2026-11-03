@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: flutter-quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   analyze-and-test:
     name: Flutter analysis and widget tests
@@ -28,6 +32,9 @@ jobs:
 
       - name: Resolve dependencies
         run: flutter pub get
+
+      - name: Show dependency lock changes for review
+        run: git diff -- pubspec.lock
 
       - name: Analyze Dart sources
         run: flutter analyze
