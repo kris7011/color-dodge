@@ -1,5 +1,4 @@
 import 'package:color_dodge/game/color_dodge_game.dart';
-import 'package:flame/events.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
