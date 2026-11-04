@@ -9,7 +9,7 @@ Move between five lanes to avoid incoming obstacles. Survive longer to increase 
 - **Survival:** Playable obstacle-dodging mode with a five-lane arena.
 - **Daily Challenge:** A UTC-day seeded obstacle run with a separate local record each day.
 - **Color Match:** Steer into blocks of your own colour, build combos and survive colour changes and faster levels (see below).
-- **Controls:** Drag left or right to move your player. Color Match also accepts a tap on a lane and the arrow keys or A/D.
+- **Controls:** Drag or tap a lane in any mode. Survival, Daily Challenge and Color Match accept arrow keys or A/D on keyboard-equipped devices.
 - **Changing patterns:** Obstacle rows vary as the run progresses.
 - **Live HUD:** Displays score during the run, followed by score, best score, and near misses on the results screen.
 - **Replay:** Start another run from the end-of-game overlay.
@@ -128,4 +128,4 @@ This is a **portfolio and learning project**, not a published mobile game. All t
 
 The Windows window opens in portrait (460 × 820) to match the game's phone layout. Daily Challenge uses the UTC date as the random seed. Device size and game-frame timing may still affect the experience, so this is not a synchronized worldwide leaderboard.
 
-Potential next steps are keyboard controls for Survival, further accessibility refinements, and running the on-device test on Android in CI. Keep changes small and covered by automated tests.
+Potential next steps are further accessibility refinements and more device testing. Keep changes small and covered by automated tests.
