@@ -61,6 +61,43 @@ jobs:
           xcrun simctl boot "$simulator_id" || true
           xcrun simctl bootstatus "$simulator_id" -b
           echo "id=$simulator_id" >> "$GITHUB_OUTPUT"
+      - name: Verify Flutter and iOS toolchain
+        run: |
+          flutter --version
+          xcodebuild -version
+          flutter devices
       - name: Run Color Match on the simulator
         shell: bash
-        run: python3 -c 'import subprocess,sys; subprocess.run(["flutter", "test", "integration_test/mobile_smoke_test.dart", "-d", sys.argv[1]], check=True, timeout=420)' "${{ steps.simulator.outputs.id }}"
+        env:
+          IOS_SIMULATOR_ID: ${{ steps.simulator.outputs.id }}
+        run: |
+          python3 -u - <<'PY'
+          import os
+          import subprocess
+          import sys
+
+          command = [
+              "flutter",
+              "test",
+              "--no-pub",
+              "--reporter",
+              "expanded",
+              "integration_test/mobile_smoke_test.dart",
+              "-d",
+              os.environ["IOS_SIMULATOR_ID"],
+          ]
+          print("Running the real iOS simulator integration test", flush=True)
+          try:
+              subprocess.run(command, check=True, timeout=900)
+          except subprocess.TimeoutExpired:
+              print("Integration test exceeded 15 minutes; preserving failed CI", flush=True)
+              sys.exit(124)
+          PY
+      - name: Collect simulator diagnostics after a failed smoke test
+        if: failure()
+        shell: bash
+        env:
+          IOS_SIMULATOR_ID: ${{ steps.simulator.outputs.id }}
+        run: |
+          xcrun simctl list devices booted
+          xcrun simctl spawn "$IOS_SIMULATOR_ID" log show --last 3m --style compact --predicate 'process == "Runner" || process == "SpringBoard"' | tail -n 180 || true
