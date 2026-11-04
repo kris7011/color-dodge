@@ -3,6 +3,7 @@ import 'package:flame/components.dart';
 import 'package:flame/events.dart';
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'game_mode.dart';
 import 'collision_geometry.dart';
@@ -64,7 +65,7 @@ class _PlannedRow {
 }
 
 class ColorDodgeGame extends FlameGame
-    with DragCallbacks, TapCallbacks, HasCollisionDetection {
+    with DragCallbacks, TapCallbacks, HasCollisionDetection, KeyboardEvents {
   ColorDodgeGame({
     this.onGameOver,
     this.onNewBestScore,
@@ -107,6 +108,9 @@ class ColorDodgeGame extends FlameGame
   int _recommendedLane = 2;
   int _targetLane = 2;
   int _nearMisses = 0;
+
+  /// Lane selected by touch or keyboard, zero-based.
+  int get selectedLane => _targetLane;
 
   _SectionType? _lastSectionType;
 
@@ -740,6 +744,29 @@ class ColorDodgeGame extends FlameGame
     }
 
     _targetLane = _clampLane(lane);
+  }
+
+  @override
+  KeyEventResult onKeyEvent(
+    KeyEvent event,
+    Set<LogicalKeyboardKey> keysPressed,
+  ) {
+    if (event is! KeyDownEvent || _isGameOver || _isVictory) {
+      return KeyEventResult.ignored;
+    }
+
+    final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.arrowLeft ||
+        key == LogicalKeyboardKey.keyA) {
+      _moveToLane(_targetLane - 1);
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.arrowRight ||
+        key == LogicalKeyboardKey.keyD) {
+      _moveToLane(_targetLane + 1);
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
   }
 
   @override
