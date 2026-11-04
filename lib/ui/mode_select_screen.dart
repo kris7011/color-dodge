@@ -210,7 +210,7 @@ class _ModeSelectScreenState extends State<ModeSelectScreen> {
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
-                                      'Tip: Drag left/right to move.',
+                                      'Tip: Drag, tap or use ← → / A D to move.',
                                       style: t.bodySmall?.copyWith(
                                         color: Colors.white70,
                                       ),
