@@ -13,8 +13,9 @@ Move between five lanes to avoid incoming obstacles. Survive longer to increase 
 - **Changing patterns:** Obstacle rows vary as the run progresses.
 - **Live HUD:** Displays score during the run, followed by score, best score, and near misses on the results screen.
 - **Replay:** Start another run from the end-of-game overlay.
+- **Accessibility preferences:** The settings icon on the mode menu lets players disable Color Match's brief full-screen miss flash. The setting persists locally; scoring and gameplay are unchanged.
 
-Best scores and Color Match progress are stored locally using SharedPreferences and persist across app launches.
+Best scores, Color Match progress and accessibility preferences are stored locally using SharedPreferences and persist across app launches.
 
 ## Color Match
 
@@ -43,11 +44,13 @@ The symbols mean the mode does not depend on telling colours apart.
 
 The screenshots come from a real Windows desktop run of the app (see *Verified platforms*).
 
+**Accessibility:** In the mode menu, open *Accessibility settings* and enable *Reduce colour flashes* to remove the red full-screen effect shown when a Color Match block is missed. The local preference is loaded before opening Color Match. It does not change points, lives or collision logic.
+
 ## Technology
 
 | Layer | Technology |
 | --- | --- |
-| UI and navigation | Flutter / Material |
+| UI and navigation | Flutter / Material, `flutter_bloc` (settings only) |
 | Gameplay and rendering | Flame |
 | Language | Dart (SDK `^3.10.8`) |
 | Static analysis | `flutter analyze` |
@@ -72,7 +75,7 @@ flutter analyze
 flutter test
 ```
 
-GitHub Actions runs both commands for pushes to `main` and pull requests. The tests cover the menu (including Color Match progress and returning from a run), best-score storage, collision geometry, the daily seed, the Color Match rules (scoring, combos, lives, colour changes, levels, reachable rows, seeded determinism), Color Match progress storage, and a widget test that plays a seeded Color Match run through the real Flame game loop until the results appear.
+GitHub Actions runs both commands for pushes to `main` and pull requests. The tests cover preferences Cubit state transitions, persistence, UI wiring, and the menu (including Color Match progress and returning from a run), best-score storage, collision geometry, the daily seed, the Color Match rules (scoring, combos, lives, colour changes, levels, reachable rows, seeded determinism), Color Match progress storage, and a widget test that plays a seeded Color Match run through the real Flame game loop until the results appear.
 
 ### On-device run
 
@@ -94,6 +97,11 @@ lib/
     color_match/
       color_match_rules.dart  # Color Match rules (pure Dart, unit tested)
       color_match_game.dart   # Color Match Flame game: rows, player, feedback
+  features/preferences/
+    domain/              # Immutable preferences and repository contract
+    data/                # SharedPreferences adapter
+    application/         # GamePreferencesCubit, loading/saving/error states
+    presentation/        # Accessibility settings UI
   storage/
     best_score_store.dart
     color_match_progress_store.dart
@@ -120,4 +128,4 @@ This is a **portfolio and learning project**, not a published mobile game. All t
 
 The Windows window opens in portrait (460 × 820) to match the game's phone layout. Daily Challenge uses the UTC date as the random seed. Device size and game-frame timing may still affect the experience, so this is not a synchronized worldwide leaderboard.
 
-Potential next steps are keyboard controls for Survival, accessibility refinements, and running the on-device test on Android in CI. Keep changes small and covered by automated tests.
+Potential next steps are keyboard controls for Survival, further accessibility refinements, and running the on-device test on Android in CI. Keep changes small and covered by automated tests.

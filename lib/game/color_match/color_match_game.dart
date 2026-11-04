@@ -44,11 +44,12 @@ class ColorMatchHud {
 /// All rules (scoring, lives, colours, levels) live in [ColorMatchRules].
 class ColorMatchGame extends FlameGame
     with DragCallbacks, TapCallbacks, KeyboardEvents {
-  ColorMatchGame({this.seed, this.onRunFinished})
+  ColorMatchGame({this.seed, this.onRunFinished, this.reduceFlashes = false})
     : rules = ColorMatchRules(seed: seed);
 
   final int? seed;
   final ValueChanged<ColorMatchRules>? onRunFinished;
+  final bool reduceFlashes;
 
   ColorMatchRules rules;
 
@@ -261,7 +262,9 @@ class ColorMatchGame extends FlameGame
           color: const Color(0xFFFF5C7A),
         ),
       );
-      _flashTimeLeft = _flashDuration;
+      if (!reduceFlashes) {
+        _flashTimeLeft = _flashDuration;
+      }
     }
 
     if (result.newColor != null) {

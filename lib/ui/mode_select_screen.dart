@@ -3,6 +3,9 @@ import 'package:color_dodge/storage/color_match_progress_store.dart';
 import 'package:color_dodge/ui/color_match_screen.dart';
 import 'package:color_dodge/ui/game_screen.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import '../features/preferences/application/game_preferences_cubit.dart';
+import '../features/preferences/presentation/game_preferences_screen.dart';
 
 Color _a(Color c, double opacity) {
   return c.withValues(alpha: opacity.clamp(0.0, 1.0));
@@ -21,9 +24,19 @@ class _ModeSelectScreenState extends State<ModeSelectScreen> {
   Future<ColorMatchProgress> _colorMatchProgress = _progressStore.load();
 
   Future<void> _openColorMatch() async {
-    await Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => const ColorMatchScreen()));
+    final preferencesCubit = context.read<GamePreferencesCubit>();
+    await preferencesCubit.load();
+    if (!mounted) return;
+
+    final preferencesState = preferencesCubit.state;
+    final reduceFlashes = preferencesState is GamePreferencesReady &&
+        preferencesState.preferences.reduceFlashes;
+
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ColorMatchScreen(reduceFlashes: reduceFlashes),
+      ),
+    );
 
     // The run may have changed the stored progress shown on the card.
     if (mounted) {
@@ -96,13 +109,29 @@ class _ModeSelectScreenState extends State<ModeSelectScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              'Color Dodge',
-                              style: t.headlineMedium?.copyWith(
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: -0.5,
-                                color: Colors.white,
-                              ),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    'Color Dodge',
+                                    style: t.headlineMedium?.copyWith(
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: -0.5,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.settings_outlined),
+                                  tooltip: 'Accessibility settings',
+                                  onPressed: () => Navigator.of(context).push(
+                                    MaterialPageRoute<void>(
+                                      builder: (_) =>
+                                          const GamePreferencesScreen(),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                             const SizedBox(height: 6),
                             Text(

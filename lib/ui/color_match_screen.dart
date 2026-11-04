@@ -14,12 +14,14 @@ class ColorMatchScreen extends StatefulWidget {
     super.key,
     this.store = const ColorMatchProgressStore(),
     this.seed,
+    this.reduceFlashes = false,
   });
 
   final ColorMatchProgressStore store;
 
   /// Fixed seed for reproducible runs (tests); null gives a new course every run.
   final int? seed;
+  final bool reduceFlashes;
 
   @override
   State<ColorMatchScreen> createState() => _ColorMatchScreenState();
@@ -28,6 +30,7 @@ class ColorMatchScreen extends StatefulWidget {
 class _ColorMatchScreenState extends State<ColorMatchScreen> {
   late final ColorMatchGame _game = ColorMatchGame(
     seed: widget.seed,
+    reduceFlashes: widget.reduceFlashes,
     onRunFinished: _recordRun,
   );
   late final Future<ColorMatchProgress> _progress = widget.store.load();
